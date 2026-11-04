@@ -24,6 +24,30 @@ export task trees into Markdown nested lists.
   - `isBlocked` is automatically `true` when any direct or transitive subtask in
     `depends_on` is not `completed`.
 
+## DAG Modeling Guidelines
+
+- **Model deliverables and verification gates**: Represent each concrete
+  deliverable, workstream, or verification gate as a task node. When a review or
+  test iteration requires rework on an existing deliverable, reopen and update
+  that task (`task_update` with `status: "in_progress"`) so the graph tracks the
+  state of each deliverable across iterations.
+- **Keep dependency edges minimal (transitive reduction)**: Connect each parent
+  task only to its immediate child dependencies (`Root > A > B` means `Root`
+  depends on `["A"]`, and `A` depends on `["B"]`) so transitive completion rules
+  propagate cleanly down the hierarchy.
+- **Keep single-action steps inside the parent task**: Record one-shot
+  sub-actions (such as posting a reply or triggering a check) in the deliverable
+  task's `description`, `metadata`, or `completionNote` so every node represents
+  a meaningful milestone.
+- **Attach reference URLs in `metadata`**: Store relevant `http(s)://` URLs
+  (such as pull requests, CI builds, issues, or design docs) in `metadata`
+  (`str -> str` mapping) so the Focused Task inspector renders them as clickable
+  links.
+- **Keep focus on the active task**: When registering multiple tasks in a batch
+  or transitioning between tasks, pass `focus: false` on queued tasks and focus
+  the currently active (`in_progress`) task (via `focus: true` or `task_focus`)
+  so the Focused Task inspector and Graph View hop radius track live execution.
+
 ## MCP Tools (`task_*`)
 
 - **`task_register`**: Register a task with `id`, `title`, optional
