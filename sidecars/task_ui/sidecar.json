@@ -1,0 +1,23 @@
+{
+  "command": "node",
+  "args": ["main.mjs"],
+  "restart_policy": "always",
+  "display_name": "Task Progress",
+  "description": "Visualize and manage conversation task progress as a DAG with interactive Graph/List views, hop-radius filtering, and spanning-tree Markdown export",
+  "has_web_ui": true,
+  "ui_config": {
+    "display_name": "Task Progress",
+    "views": [
+      {
+        "path": "/",
+        "entrypoint": "SIDECAR_UI_ENTRYPOINT_AUX_PANE",
+        "title": "Task Progress"
+      },
+      {
+        "path": "/fullscreen",
+        "entrypoint": "SIDECAR_UI_ENTRYPOINT_FULL_PANE",
+        "title": "Task Progress (Full)"
+      }
+    ]
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "mcpServers": {
+    "task": {
+      "command": "node",
+      "args": [
+        "${PLUGIN_ROOT}/mcp/task_mcp.mjs"
+      ],
+      "tools": {
+        "task_register": {
+          "eager": true
+        },
+        "task_update": {
+          "eager": true
+        },
+        "task_complete": {
+          "eager": true
+        },
+        "task_delete": {
+          "eager": true
+        },
+        "task_focus": {
+          "eager": true
+        },
+        "task_list": {
+          "eager": true
+        },
+        "task_export_tree": {
+          "eager": true
+        }
+      }
+    }
+  }
+}

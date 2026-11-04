@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" fill="none" role="img" aria-label="Task Progress DAG">
+  <style>
+    .ring-seg { stroke-width: 11.5px; }
+    .dag-edge { stroke-width: 6px; }
+    .dag-node { stroke-width: 3.5px; }
+    @media (max-width: 28px) {
+      .detail-only { display: none; }
+      .ring-seg { stroke-width: 15px; }
+      .dag-edge { stroke-width: 8.5px; }
+    }
+  </style>
+
+  <!-- 3+1 Stage Ring with Exact 23° Angular Gaps: Green (Done), Cyan (In Progress), Blue (Pending), Gray (Cancelled) -->
+  <path class="ring-seg" d="M 74.57 12.06 A 53 53 0 0 1 112.60 85.13" stroke="#10b981" stroke-linecap="round"/>
+  <path class="ring-seg" d="M 100.48 102.44 A 53 53 0 0 1 42.02 112.23" stroke="#06b6d4" stroke-linecap="round"/>
+  <path class="ring-seg" d="M 24.92 99.81 A 53 53 0 0 1 14.04 46.31" stroke="#3b82f6" stroke-linecap="round"/>
+  <path class="ring-seg" d="M 24.92 28.19 A 53 53 0 0 1 53.43 12.06" stroke="#71717a" stroke-linecap="round"/>
+
+  <!-- Inner Y-DAG Dependency Edges -->
+  <path class="dag-edge" d="M64 42L42 79M64 42L86 79" stroke="#cbd5e1" stroke-linecap="round"/>
+
+  <!-- Top Root Node (Blue Pending + Yellow Blocked Dot) -->
+  <circle class="dag-node" cx="64" cy="40" r="14" fill="#2563eb" stroke="#93c5fd"/>
+  <circle cx="64" cy="40" r="5.5" fill="#fde047"/>
+
+  <!-- Bottom-Left Subtask Node (Green Completed + Checkmark) -->
+  <circle class="dag-node" cx="42" cy="79" r="14" fill="#059669" stroke="#6ee7b7"/>
+  <path d="M36.5 79L40.5 83L48.5 75" stroke="#ecfdf5" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Bottom-Right Subtask Node (Cyan In Progress) -->
+  <circle class="dag-node" cx="86" cy="79" r="14" fill="#0891b2" stroke="#67e8f9"/>
+  <circle class="detail-only" cx="86" cy="79" r="4.5" fill="#ecfeff"/>
+</svg>
