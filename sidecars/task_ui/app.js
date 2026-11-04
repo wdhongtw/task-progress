@@ -779,7 +779,7 @@
           sub.radius > 1 ? 's' : ''
         }) · ${visibleNodes.length}/${sub.totalNodes} tasks`;
       } else {
-        hintEl.textContent = `Showing ${visibleNodes.length} of ${sub.totalNodes} tasks (A → subtask)`;
+        hintEl.textContent = `Showing ${visibleNodes.length} of ${sub.totalNodes} tasks`;
       }
     }
 
