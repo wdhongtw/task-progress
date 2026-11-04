@@ -530,6 +530,16 @@ async function processRpcMessage(msg) {
   }
 }
 
+let rpcQueue = Promise.resolve();
+
+function enqueueRpcMessage(msg) {
+  rpcQueue = rpcQueue
+    .then(() => processRpcMessage(msg))
+    .catch((err) => {
+      sendError(msg?.id ?? null, -32603, err?.message || String(err));
+    });
+}
+
 function drainInputBuffer() {
   while (inputBuffer.length > 0) {
     const headerStart = inputBuffer.subarray(0, 32).toString('utf-8');
@@ -547,7 +557,7 @@ function drainInputBuffer() {
         .toString('utf-8');
       inputBuffer = inputBuffer.subarray(totalLen);
       try {
-        processRpcMessage(JSON.parse(bodyText));
+        enqueueRpcMessage(JSON.parse(bodyText));
       } catch (err) {
         sendError(null, -32700, `Parse error: ${err.message}`);
       }
@@ -558,7 +568,7 @@ function drainInputBuffer() {
       inputBuffer = inputBuffer.subarray(nlIdx + 1);
       if (!line) continue;
       try {
-        processRpcMessage(JSON.parse(line));
+        enqueueRpcMessage(JSON.parse(line));
       } catch (err) {
         sendError(null, -32700, `Parse error: ${err.message}`);
       }

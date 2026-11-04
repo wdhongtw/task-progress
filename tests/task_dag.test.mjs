@@ -565,6 +565,171 @@ test('task_delete removes task and cleans up parent depends_on references', () =
   assert.deepEqual(fold.tasks.get('A').dependsOn, []);
 });
 
+test('handleToolCall task_delete ignores in-flight CORTEX_STEP_STATUS_RUNNING trajectory step', async () => {
+  const trajectoryData = {
+    ok: true,
+    metadata: { projectId: 'proj-demo' },
+    parentReferences: [],
+    steps: [
+      {
+        type: 'CORTEX_STEP_TYPE_GENERIC',
+        status: 'CORTEX_STEP_STATUS_DONE',
+        metadata: {
+          createdAt: '2026-11-04T15:00:00Z',
+          toolCall: {
+            id: 'tc-reg-1',
+            name: 'mcp_task-progress_task_task_register',
+            argumentsJson: JSON.stringify({
+              id: 'phase-1-child-bug',
+              title: 'Phase 1',
+              status: 'completed',
+            }),
+          },
+        },
+      },
+      {
+        type: 'CORTEX_STEP_TYPE_GENERIC',
+        status: 'CORTEX_STEP_STATUS_DONE',
+        metadata: {
+          createdAt: '2026-11-04T15:01:00Z',
+          toolCall: {
+            id: 'tc-reg-2',
+            name: 'mcp_task-progress_task_task_register',
+            argumentsJson: JSON.stringify({
+              id: 'phase-2-main-impl',
+              title: 'Phase 2',
+              status: 'pending',
+              depends_on: ['phase-1-child-bug'],
+            }),
+          },
+        },
+      },
+      {
+        type: 'CORTEX_STEP_TYPE_GENERIC',
+        status: 'CORTEX_STEP_STATUS_RUNNING',
+        metadata: {
+          createdAt: '2026-11-04T15:02:00Z',
+          toolCall: {
+            id: 'tc-del-inflight',
+            name: 'mcp_task-progress_task_task_delete',
+            argumentsJson: JSON.stringify({
+              id: 'phase-2-main-impl',
+            }),
+          },
+        },
+      },
+    ],
+  };
+
+  const mcpRes = await handleToolCall(
+    {
+      name: 'task_delete',
+      arguments: { id: 'phase-2-main-impl' },
+    },
+    { trajectoryData }
+  );
+  assert.equal(mcpRes.isError, false);
+  const parsed = JSON.parse(mcpRes.content[0].text);
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.deletedTaskId, 'phase-2-main-impl');
+  assert.equal(parsed.summary.total, 1);
+});
+
+test('handleToolCall preserves committed in-flight state across parallel RUNNING calls in the same turn', async () => {
+  const convId = 'conv-parallel-inflight';
+  const steps = [
+    {
+      type: 'CORTEX_STEP_TYPE_GENERIC',
+      status: 'CORTEX_STEP_STATUS_RUNNING',
+      metadata: {
+        createdAt: '2026-11-04T16:00:00Z',
+        toolCall: {
+          id: 'tc-par-1',
+          name: 'mcp_task-progress_task_task_register',
+          argumentsJson: JSON.stringify({
+            id: 'leaf-sub',
+            title: 'Leaf Subtask',
+            status: 'completed',
+          }),
+        },
+      },
+    },
+    {
+      type: 'CORTEX_STEP_TYPE_GENERIC',
+      status: 'CORTEX_STEP_STATUS_RUNNING',
+      metadata: {
+        createdAt: '2026-11-04T16:00:01Z',
+        toolCall: {
+          id: 'tc-par-2',
+          name: 'mcp_task-progress_task_task_register',
+          argumentsJson: JSON.stringify({
+            id: 'parent-root',
+            title: 'Parent Root',
+            status: 'in_progress',
+            depends_on: ['leaf-sub'],
+          }),
+        },
+      },
+    },
+  ];
+  const trajectoryData = {
+    ok: true,
+    metadata: { projectId: 'proj-demo' },
+    parentReferences: [],
+    steps,
+  };
+
+  // Call 1 executes while both tc-par-1 and tc-par-2 are RUNNING
+  const res1 = await handleToolCall(
+    {
+      name: 'task_register',
+      arguments: {
+        id: 'leaf-sub',
+        title: 'Leaf Subtask',
+        status: 'completed',
+      },
+      _meta: { 'antigravity.google/conversation_id': convId },
+    },
+    { trajectoryData }
+  );
+  assert.equal(res1.isError, false);
+  const parsed1 = JSON.parse(res1.content[0].text);
+  assert.equal(parsed1.summary.total, 1);
+
+  // Call 2 executes immediately while tc-par-1 is STILL RUNNING in trajectory
+  const res2 = await handleToolCall(
+    {
+      name: 'task_register',
+      arguments: {
+        id: 'parent-root',
+        title: 'Parent Root',
+        status: 'in_progress',
+        depends_on: ['leaf-sub'],
+      },
+      _meta: { 'antigravity.google/conversation_id': convId },
+    },
+    { trajectoryData }
+  );
+  assert.equal(res2.isError, false);
+  const parsed2 = JSON.parse(res2.content[0].text);
+  assert.equal(parsed2.summary.total, 2);
+
+  // Once both steps transition to DONE, task_list folds them cleanly without duplication
+  steps[0].status = 'CORTEX_STEP_STATUS_DONE';
+  steps[1].status = 'CORTEX_STEP_STATUS_DONE';
+  const listRes = await handleToolCall(
+    {
+      name: 'task_list',
+      arguments: {},
+      _meta: { 'antigravity.google/conversation_id': convId },
+    },
+    { trajectoryData }
+  );
+  assert.equal(listRes.isError, false);
+  const parsedList = JSON.parse(listRes.content[0].text);
+  assert.equal(parsedList.summary.total, 2);
+});
+
 test('metadata enforces str -> str mapping and supports key deletion', () => {
   const fold = createEmptyFoldState();
 
