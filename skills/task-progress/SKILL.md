@@ -48,31 +48,28 @@ export task trees into Markdown nested lists.
   the currently active (`in_progress`) task (via `focus: true` or `task_focus`)
   so the Focused Task inspector and Graph View hop radius track live execution.
 
-## MCP Tools (`task_*`)
+## Lifecycle & Execution Workflows
 
-- **`task_register`**: Register a task with `id`, `title`, optional
-  `description`, `status` (`pending`, `in_progress`, `completed`, `cancelled`),
-  `depends_on` (array of subtask IDs), `metadata` (`str -> str` mapping), and
-  `focus` (defaults to `true`). Register subtasks before parent tasks, or pass
-  `create_missing_dependencies: true`.
-- **`task_update`**: Update `title`, `description`, `status`, `depends_on`,
-  `add_depends_on`, `remove_depends_on`, `metadata` (`str -> str` mapping;
-  merges keys, set a key to `""` or `null` to remove it, or pass
-  `replace_metadata: true`), or `focus`.
-- **`task_complete`**: Mark a task as `completed`. Enforces that all subtasks in
-  its dependency subtree are already `completed` (returning an actionable error
-  listing any incomplete subtasks and their paths unless `force: true` is
-  passed).
-- **`task_delete`**: Delete a task by `id` and clean up incoming `depends_on`
-  references.
-- **`task_focus`**: Focus a task by `id` in the AuxPane UI (centering the Graph
-  View hop radius on it and showing its details in the inspector).
-- **`task_list`**: List all tasks sorted by `created`, `updated`, `in_degree`,
-  `out_degree`, `total_degree`, `status`, `topological`, or `title`.
-- **`task_export_tree`**: Export a task dependency tree rooted at `root_id` (or
-  `"all"` for all top-level tasks with `inDegree === 0`) into a GFM Markdown
-  nested list using a `bfs` (default, places shared diamond subtasks at the
-  shallowest depth) or `dfs` spanning tree algorithm.
+- **Batch bootstrapping**: Register leaf subtasks first (or pass
+  `create_missing_dependencies: true`), setting `status: "in_progress"` and
+  `focus: true` on the initial active leaf task while passing `focus: false` on
+  queued parent and sibling tasks.
+- **Transitioning between tasks**: When a subtask finishes, call `task_complete`
+  (recording verification outcomes in `note`) and update the next unblocked task
+  to `status: "in_progress"` with `focus: true`.
+- **Rework on verification failure**: If a downstream verification gate uncovers
+  an issue in an upstream deliverable, reopen the upstream task via
+  `task_update` (`status: "in_progress", focus: true`) and keep the verification
+  gate `pending` (which automatically marks it `isBlocked: true` until the
+  upstream task is re-completed).
+- **Updating & pruning metadata**: `task_update` merges incoming `metadata`
+  (`str -> str`) keys by default; set a key to `""` or `null` to delete that
+  key, or pass `replace_metadata: true` to replace the entire metadata map.
+- **Exporting spanning-tree Markdown (`task_export_tree`)**:
+  - Use `algo: "bfs"` (default) when shared diamond subtasks should appear at
+    the shallowest level closest to the root.
+  - Use `algo: "dfs"` when each top-level branch should be expanded deeply
+    before moving to sibling branches.
 
 ## Opening the Interactive AuxPane UI
 
