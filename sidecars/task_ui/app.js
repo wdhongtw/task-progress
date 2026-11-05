@@ -49,7 +49,6 @@
     sortOrder: 'asc',
     detailCollapsed: false,
     uiAssetVersion: '',
-    live: true,
   };
 
   function esc(str) {
@@ -447,25 +446,6 @@
   }
 
   function renderHeaderAndChips() {
-    const convBadge = $('conv-badge');
-    const cid = resolveConversationId();
-    if (cid) {
-      convBadge.textContent = cid.slice(0, 8);
-      convBadge.classList.remove('hidden');
-    } else {
-      convBadge.classList.add('hidden');
-    }
-
-    const forkBadge = $('fork-badge');
-    if (state.isForkedSession) {
-      forkBadge.textContent = state.parentConversationId
-        ? `Fork ← ${state.parentConversationId.slice(0, 6)}`
-        : 'Forked';
-      forkBadge.classList.remove('hidden');
-    } else {
-      forkBadge.classList.add('hidden');
-    }
-
     const s = state.summary;
     const totalActive = Math.max(0, s.total - s.cancelled);
     const compPct = s.completionPercent || 0;
@@ -1368,15 +1348,6 @@
     }
   });
 
-  $('btn-refresh')?.addEventListener('click', () => {
-    fetchState();
-    showToast('Refreshed task DAG');
-  });
-
-  $('chk-live')?.addEventListener('change', (e) => {
-    state.live = e.target.checked;
-  });
-
   $('btn-zoom-in')?.addEventListener('click', () => {
     zoomAtPoint(state.zoom * 1.2);
   });
@@ -1479,11 +1450,32 @@
     { passive: false }
   );
 
-  // Initial load + polling
-  fetchState();
+  // Initial load + automatic refresh on focus, visibility, hover, and interval
+  let lastRefreshAt = 0;
+  async function refreshIfActive({ minIntervalMs = 0 } = {}) {
+    const now = Date.now();
+    if (minIntervalMs > 0 && now - lastRefreshAt < minIntervalMs) return;
+    lastRefreshAt = now;
+    await fetchState();
+  }
+
+  refreshIfActive();
+
+  window.addEventListener('focus', () => {
+    refreshIfActive({ minIntervalMs: 1000 });
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      refreshIfActive({ minIntervalMs: 1000 });
+    }
+  });
+  document.addEventListener('mouseenter', () => {
+    refreshIfActive({ minIntervalMs: 2000 });
+  });
+
   setInterval(() => {
-    if (state.live && !document.hidden) {
-      fetchState();
+    if (!document.hidden) {
+      refreshIfActive();
     }
   }, POLL_INTERVAL_MS);
 })();
