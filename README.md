@@ -18,8 +18,8 @@ exporting per-session task dependency graphs (DAGs).
 - **Interactive AuxPane UI (`task_ui`)**:
   - **Graph View (DAG)**: Hierarchical SVG DAG visualization with configurable
     hop-radius limiting (`1`, `2`, `3`, `All`) centered on the focused task,
-    `TB` / `LR` orientation toggle, pan/zoom, and visual distinction between
-    completed and blocking dependency edges.
+    pan/zoom, and visual distinction between completed and blocking dependency
+    edges.
   - **List View**: Filterable by status or blocked state (`All`, `Pending`,
     `In Progress`, `Completed`, `Cancelled`, `Blocked`) and sortable by
     `Created Time`, `Updated Time`, `In-Degree`, `Out-Degree`, `Total Degree`,

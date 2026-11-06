@@ -2,7 +2,7 @@
   "name": "task-progress",
   "displayName": "Task Progress DAG",
   "description": "Visualize and manage conversation task progress as a DAG with interactive Graph/List views, hop-radius filtering, and spanning-tree Markdown export.",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "logo": "assets/logo.svg",
   "suggestedPrompts": [
     "Break down the current goal into a task DAG using task_register",

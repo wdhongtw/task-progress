@@ -3,7 +3,7 @@
  *
  * Provides:
  * - Interactive SVG DAG Graph View with hop-radius limiting (`1`, `2`, `3`, `All`)
- *   centered on the focused task, `TB`/`LR` layout toggle, and pan/zoom.
+ *   centered on the focused task and pan/zoom.
  * - Sortable & filterable List View (`created`, `updated`, `in_degree`,
  *   `out_degree`, `total_degree`, `status`, `topological`, `title`).
  * - Sticky Focused Task Details Inspector with clickable dependency/dependent
@@ -38,7 +38,6 @@
     activeView: 'graph', // 'graph' | 'list'
     statusFilter: 'all', // 'all' | 'in_progress' | 'pending' | 'completed' | 'blocked' | 'cancelled'
     graphRadius: 'all', // '1' | '2' | '3' | 'all'
-    graphOrient: 'TB', // 'TB' | 'LR'
     zoom: 1,
     panX: 0,
     panY: 0,
@@ -524,8 +523,8 @@
     }
   }
 
-  // Compute Sugiyama-style layered DAG positions for visible nodes
-  function computeDagLayout(nodes, edges, orient = 'TB') {
+  // Compute Sugiyama-style top-to-bottom layered DAG positions for visible nodes
+  function computeDagLayout(nodes, edges) {
     const byId = new Map(nodes.map((n) => [n.id, n]));
     const inDeg = new Map();
     const parentsOf = new Map();
@@ -613,56 +612,40 @@
 
     const NODE_W = 196;
     const NODE_H = 66;
-    const GAP_MAIN = orient === 'TB' ? 56 : 68;
-    const GAP_CROSS = orient === 'TB' ? 24 : 20;
+    const GAP_MAIN = 56;
+    const GAP_CROSS = 24;
     const PAD = 32;
 
     const maxNodesInLayer = Math.max(1, ...layers.map((l) => l.length));
     const maxCrossSpan =
-      maxNodesInLayer * (orient === 'TB' ? NODE_W : NODE_H) +
-      (maxNodesInLayer - 1) * GAP_CROSS;
+      maxNodesInLayer * NODE_W + (maxNodesInLayer - 1) * GAP_CROSS;
 
     const positions = new Map();
     layers.forEach((layer, lIdx) => {
       const count = layer.length;
       const layerSpan =
-        count * (orient === 'TB' ? NODE_W : NODE_H) +
-        Math.max(0, count - 1) * GAP_CROSS;
+        count * NODE_W + Math.max(0, count - 1) * GAP_CROSS;
       const startCross = PAD + (maxCrossSpan - layerSpan) / 2;
-      const mainCoord =
-        PAD + lIdx * ((orient === 'TB' ? NODE_H : NODE_W) + GAP_MAIN);
+      const mainCoord = PAD + lIdx * (NODE_H + GAP_MAIN);
 
       layer.forEach((node, idx) => {
-        const crossCoord =
-          startCross + idx * ((orient === 'TB' ? NODE_W : NODE_H) + GAP_CROSS);
-        if (orient === 'TB') {
-          positions.set(node.id, {
-            x: crossCoord,
-            y: mainCoord,
-            w: NODE_W,
-            h: NODE_H,
-          });
-        } else {
-          positions.set(node.id, {
-            x: mainCoord,
-            y: crossCoord,
-            w: NODE_W,
-            h: NODE_H,
-          });
-        }
+        const crossCoord = startCross + idx * (NODE_W + GAP_CROSS);
+        positions.set(node.id, {
+          x: crossCoord,
+          y: mainCoord,
+          w: NODE_W,
+          h: NODE_H,
+        });
       });
     });
 
-    const totalMain =
-      PAD * 2 +
-      (maxLayer + 1) * (orient === 'TB' ? NODE_H : NODE_W) +
-      maxLayer * GAP_MAIN;
+    const totalMain = PAD * 2 + (maxLayer + 1) * NODE_H + maxLayer * GAP_MAIN;
     const totalCross = PAD * 2 + maxCrossSpan;
 
     return {
       positions,
-      width: orient === 'TB' ? Math.max(320, totalCross) : Math.max(320, totalMain),
-      height: orient === 'TB' ? Math.max(220, totalMain) : Math.max(220, totalCross),
+      width: Math.max(320, totalCross),
+      height: Math.max(220, totalMain),
       nodeW: NODE_W,
       nodeH: NODE_H,
     };
@@ -776,10 +759,9 @@
     wrap.classList.remove('hidden');
     emptyEl.classList.add('hidden');
 
-    const orient = state.graphOrient;
-    const layout = computeDagLayout(visibleNodes, visibleEdges, orient);
+    const layout = computeDagLayout(visibleNodes, visibleEdges);
 
-    const layoutKey = `${orient}::${state.graphRadius}::${
+    const layoutKey = `${state.graphRadius}::${
       sub.isFiltered ? state.focusedTaskId : ''
     }::${visibleNodes.map((n) => n.id).join(',')}`;
     const shouldAutoFit = !state.hasFittedGraph || state.lastLayoutKey !== layoutKey;
@@ -790,27 +772,12 @@
         const toPos = layout.positions.get(e.to);
         if (!fromPos || !toPos) return '';
 
-        let x1;
-        let y1;
-        let x2;
-        let y2;
-        let dPath;
-
-        if (orient === 'TB') {
-          x1 = fromPos.x + fromPos.w / 2;
-          y1 = fromPos.y + fromPos.h;
-          x2 = toPos.x + toPos.w / 2;
-          y2 = toPos.y - 4;
-          const cy = (y1 + y2) / 2;
-          dPath = `M ${x1} ${y1} C ${x1} ${cy}, ${x2} ${cy}, ${x2} ${y2}`;
-        } else {
-          x1 = fromPos.x + fromPos.w;
-          y1 = fromPos.y + fromPos.h / 2;
-          x2 = toPos.x - 4;
-          y2 = toPos.y + toPos.h / 2;
-          const cx = (x1 + x2) / 2;
-          dPath = `M ${x1} ${y1} C ${cx} ${y1}, ${cx} ${y2}, ${x2} ${y2}`;
-        }
+        const x1 = fromPos.x + fromPos.w / 2;
+        const y1 = fromPos.y + fromPos.h;
+        const x2 = toPos.x + toPos.w / 2;
+        const y2 = toPos.y - 4;
+        const cy = (y1 + y2) / 2;
+        const dPath = `M ${x1} ${y1} C ${x1} ${cy}, ${x2} ${cy}, ${x2} ${y2}`;
 
         const isCompleted = e.depStatus === 'completed';
         const edgeClass = isCompleted ? 'completed' : 'blocking';
@@ -1290,16 +1257,6 @@
       state.graphRadius = radiusBtn.dataset.radius || 'all';
       for (const b of document.querySelectorAll('#radius-group .seg-btn')) {
         b.classList.toggle('active', b === radiusBtn);
-      }
-      renderAll();
-      return;
-    }
-
-    const orientBtn = e.target.closest('[data-orient]');
-    if (orientBtn) {
-      state.graphOrient = orientBtn.dataset.orient || 'TB';
-      for (const b of document.querySelectorAll('#orient-group .seg-btn')) {
-        b.classList.toggle('active', b === orientBtn);
       }
       renderAll();
       return;
