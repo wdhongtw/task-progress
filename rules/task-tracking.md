@@ -1,3 +1,8 @@
+---
+trigger: always_on
+description: Keep the session Task Progress DAG synchronized using task_* MCP tools when planning or executing multi-step tasks.
+---
+
 # Session Task Progress DAG Tracking (`task_*`)
 
 When planning or executing multi-step tasks in a conversation, keep the
