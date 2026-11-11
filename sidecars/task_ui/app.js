@@ -999,16 +999,15 @@
             .map((depId) => {
               const dep = byId.get(depId);
               const st = dep ? dep.status : 'pending';
-              const isBlocking = st !== 'completed';
+              const titleText = dep ? dep.title : depId;
               return `
-              <button type="button" class="dep-chip ${
-                isBlocking ? 'blocking' : 'completed'
-              }" data-focus-task="${esc(depId)}" title="Click to focus subtask #${esc(
-                depId
-              )}">
-                <span>${isBlocking ? '⏳' : '✓'}</span>
-                <strong>${esc(dep ? dep.title : depId)}</strong>
-                <code>#${esc(depId)}</code>
+              <button type="button" class="dep-chip status-${esc(
+                st
+              )}" data-focus-task="${esc(depId)}" title="${esc(
+                titleText
+              )} (#${esc(depId)})">
+                <span class="dep-chip-title">${esc(titleText)}</span>
+                <code class="dep-chip-id">#${esc(depId)}</code>
               </button>
             `;
             })
@@ -1021,13 +1020,16 @@
         ? task.dependents
             .map((pId) => {
               const p = byId.get(pId);
+              const st = p ? p.status : 'pending';
+              const titleText = p ? p.title : pId;
               return `
-              <button type="button" class="dep-chip" data-focus-task="${esc(
-                pId
-              )}" title="Click to focus parent task #${esc(pId)}">
-                <span>↑</span>
-                <strong>${esc(p ? p.title : pId)}</strong>
-                <code>#${esc(pId)}</code>
+              <button type="button" class="dep-chip status-${esc(
+                st
+              )}" data-focus-task="${esc(pId)}" title="${esc(
+                titleText
+              )} (#${esc(pId)})">
+                <span class="dep-chip-title">${esc(titleText)}</span>
+                <code class="dep-chip-id">#${esc(pId)}</code>
               </button>
             `;
             })
@@ -1089,10 +1091,10 @@
             ${metaEntries
               .map(
                 ([k, v]) => `
-              <span class="meta-kv">
+              <div class="meta-kv">
                 <span class="meta-key">${esc(k)}:</span>
-                <span>${formatMetaVal(v)}</span>
-              </span>
+                <span class="meta-val">${formatMetaVal(v)}</span>
+              </div>
             `
               )
               .join('')}
@@ -1138,23 +1140,21 @@
           : ''
       }
       ${transitiveBlockHtml}
-      <div class="detail-grid">
-        <div class="detail-box">
-          <div class="detail-box-label">
-            <span>Subtasks Required (depends_on)</span>
-            <span>${task.directCompletedCount}/${
+      <div class="detail-box">
+        <div class="detail-box-label">
+          <span>Subtasks Required</span>
+          <span>${task.directCompletedCount}/${
       task.directTotalCount
     } done</span>
-          </div>
-          <div class="dep-chip-list">${depsHtml}</div>
         </div>
-        <div class="detail-box">
-          <div class="detail-box-label">
-            <span>Parent Tasks Waiting (dependents)</span>
-            <span>${task.dependents.length}</span>
-          </div>
-          <div class="dep-chip-list">${parentsHtml}</div>
+        <div class="dep-chip-list">${depsHtml}</div>
+      </div>
+      <div class="detail-box">
+        <div class="detail-box-label">
+          <span>Parent Tasks Waiting</span>
+          <span>${task.dependents.length}</span>
         </div>
+        <div class="dep-chip-list">${parentsHtml}</div>
       </div>
       ${metaHtml}
     `;

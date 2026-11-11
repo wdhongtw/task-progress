@@ -771,12 +771,6 @@ body {
   white-space: pre-wrap;
 }
 
-.detail-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 8px;
-}
-
 .detail-box {
   background: var(--bg);
   border: 1px solid var(--bdr);
@@ -785,6 +779,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 5px;
+  min-width: 0;
 }
 
 .detail-box-label {
@@ -800,47 +795,92 @@ body {
 
 .dep-chip-list {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 5px;
 }
 
 .dep-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 2px 7px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
+  padding: 5px 8px;
   border-radius: 5px;
   background: var(--card-bg);
-  border: 1px solid var(--bdr);
+  border: 1px solid var(--card-bdr);
+  border-left: 3.5px solid var(--status-pending);
   font-size: 11px;
   color: var(--fg);
+  text-align: left;
   cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 
 .dep-chip:hover {
   border-color: var(--pri);
 }
 
-.dep-chip.blocking {
-  border-color: color-mix(in srgb, var(--status-blocked) 50%, transparent);
-  background: var(--status-blocked-bg);
+.dep-chip.status-completed {
+  border-left-color: var(--status-completed);
 }
 
-.dep-chip.completed {
-  border-color: rgba(16, 185, 129, 0.4);
+.dep-chip.status-in_progress {
+  border-left-color: var(--status-in-progress);
+}
+
+.dep-chip.status-pending {
+  border-left-color: var(--status-pending);
+}
+
+.dep-chip.status-cancelled {
+  border-left-color: var(--status-cancelled);
+  background: var(--muted-bg);
+  opacity: 0.52;
+}
+
+.dep-chip-title {
+  display: block;
+  width: 100%;
+  font-weight: 600;
+  font-size: 11.5px;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dep-chip.status-cancelled .dep-chip-title {
+  text-decoration: line-through;
+  color: var(--muted-fg);
+}
+
+.dep-chip-id {
+  display: block;
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  color: var(--muted-fg);
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .meta-kv-list {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 5px;
 }
 
 .meta-kv {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 7px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  padding: 4px 8px;
   border-radius: 4px;
   background: var(--card-bg);
   border: 1px solid var(--bdr);
@@ -850,6 +890,12 @@ body {
 .meta-key {
   color: var(--muted-fg);
   font-weight: 600;
+  flex-shrink: 0;
+}
+
+.meta-val {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .meta-val-link {
