@@ -665,124 +665,217 @@
     }
   }
 
-  // Compute Sugiyama-style top-to-bottom layered DAG positions for visible nodes
+  // Compute Sugiyama-style top-to-bottom layered DAG positions per connected component
   function computeDagLayout(nodes, edges) {
-    const byId = new Map(nodes.map((n) => [n.id, n]));
-    const inDeg = new Map();
-    const parentsOf = new Map();
-    const childrenOf = new Map();
-
-    for (const n of nodes) {
-      inDeg.set(n.id, 0);
-      parentsOf.set(n.id, []);
-      childrenOf.set(n.id, []);
-    }
-
-    for (const e of edges) {
-      if (!byId.has(e.from) || !byId.has(e.to)) continue;
-      childrenOf.get(e.from).push(e.to);
-      parentsOf.get(e.to).push(e.from);
-      inDeg.set(e.to, (inDeg.get(e.to) || 0) + 1);
-    }
-
-    // Assign layer = longest path from subgraph roots
-    const layerMap = new Map();
-    const queue = [];
-    for (const n of nodes) {
-      if ((inDeg.get(n.id) || 0) === 0) {
-        layerMap.set(n.id, 0);
-        queue.push(n.id);
-      }
-    }
-    if (queue.length === 0 && nodes.length > 0) {
-      layerMap.set(nodes[0].id, 0);
-      queue.push(nodes[0].id);
-    }
-
-    const remIn = new Map(inDeg);
-    const visited = new Set();
-    while (queue.length > 0) {
-      const u = queue.shift();
-      visited.add(u);
-      const uLayer = layerMap.get(u) || 0;
-      for (const v of childrenOf.get(u) || []) {
-        const nextL = Math.max(layerMap.get(v) || 0, uLayer + 1);
-        layerMap.set(v, nextL);
-        const r = (remIn.get(v) || 1) - 1;
-        remIn.set(v, r);
-        if (r <= 0 && !visited.has(v)) {
-          queue.push(v);
-        }
-      }
-    }
-
-    for (const n of nodes) {
-      if (!layerMap.has(n.id)) {
-        layerMap.set(n.id, 0);
-      }
-    }
-
-    // Group by layer
-    const maxLayer = Math.max(0, ...layerMap.values());
-    const layers = Array.from({ length: maxLayer + 1 }, () => []);
-    for (const n of nodes) {
-      layers[layerMap.get(n.id)].push(n);
-    }
-
-    // Initial deterministic order within each layer
-    for (const layer of layers) {
-      layer.sort((a, b) => (a.createdOrder ?? 0) - (b.createdOrder ?? 0));
-    }
-
-    // 2-pass barycenter sweep to reduce edge crossings
-    for (let l = 1; l <= maxLayer; l++) {
-      const prevIdx = new Map(layers[l - 1].map((n, i) => [n.id, i]));
-      layers[l].sort((a, b) => {
-        const pA = (parentsOf.get(a.id) || []).filter((id) => prevIdx.has(id));
-        const pB = (parentsOf.get(b.id) || []).filter((id) => prevIdx.has(id));
-        const bA =
-          pA.length > 0
-            ? pA.reduce((s, id) => s + prevIdx.get(id), 0) / pA.length
-            : 999;
-        const bB =
-          pB.length > 0
-            ? pB.reduce((s, id) => s + prevIdx.get(id), 0) / pB.length
-            : 999;
-        return bA - bB || (a.createdOrder ?? 0) - (b.createdOrder ?? 0);
-      });
-    }
-
     const NODE_W = 196;
     const NODE_H = 66;
     const GAP_MAIN = 56;
     const GAP_CROSS = 24;
+    const COMPONENT_GAP_X = 64;
     const PAD = 32;
 
-    const maxNodesInLayer = Math.max(1, ...layers.map((l) => l.length));
-    const maxCrossSpan =
-      maxNodesInLayer * NODE_W + (maxNodesInLayer - 1) * GAP_CROSS;
+    if (!nodes || nodes.length === 0) {
+      return {
+        positions: new Map(),
+        width: 320,
+        height: 220,
+        nodeW: NODE_W,
+        nodeH: NODE_H,
+      };
+    }
 
-    const positions = new Map();
-    layers.forEach((layer, lIdx) => {
-      const count = layer.length;
-      const layerSpan =
-        count * NODE_W + Math.max(0, count - 1) * GAP_CROSS;
-      const startCross = PAD + (maxCrossSpan - layerSpan) / 2;
-      const mainCoord = PAD + lIdx * (NODE_H + GAP_MAIN);
+    const byId = new Map(nodes.map((n) => [n.id, n]));
+    const undirectedAdj = new Map(nodes.map((n) => [n.id, []]));
+    for (const e of edges) {
+      if (!byId.has(e.from) || !byId.has(e.to)) continue;
+      undirectedAdj.get(e.from).push(e.to);
+      undirectedAdj.get(e.to).push(e.from);
+    }
 
-      layer.forEach((node, idx) => {
-        const crossCoord = startCross + idx * (NODE_W + GAP_CROSS);
-        positions.set(node.id, {
-          x: crossCoord,
-          y: mainCoord,
-          w: NODE_W,
-          h: NODE_H,
-        });
+    // Partition nodes into weakly connected components
+    const compVisited = new Set();
+    const components = [];
+    const sortedSeedNodes = [...nodes].sort(
+      (a, b) => (a.createdOrder ?? 0) - (b.createdOrder ?? 0)
+    );
+
+    for (const seed of sortedSeedNodes) {
+      if (compVisited.has(seed.id)) continue;
+      const compNodes = [];
+      const q = [seed.id];
+      compVisited.add(seed.id);
+      while (q.length > 0) {
+        const currId = q.shift();
+        const currNode = byId.get(currId);
+        if (currNode) compNodes.push(currNode);
+        for (const neighborId of undirectedAdj.get(currId) || []) {
+          if (!compVisited.has(neighborId)) {
+            compVisited.add(neighborId);
+            q.push(neighborId);
+          }
+        }
+      }
+      const minCreatedOrder = Math.min(
+        ...compNodes.map((n) => n.createdOrder ?? 0)
+      );
+      components.push({
+        nodes: compNodes,
+        isSingleIsolated: compNodes.length === 1,
+        minCreatedOrder,
       });
+    }
+
+    // Place multi-node DAG components first (in creation order), followed by standalone singletons
+    components.sort((a, b) => {
+      if (a.isSingleIsolated !== b.isSingleIsolated) {
+        return a.isSingleIsolated ? 1 : -1;
+      }
+      return a.minCreatedOrder - b.minCreatedOrder;
     });
 
-    const totalMain = PAD * 2 + (maxLayer + 1) * NODE_H + maxLayer * GAP_MAIN;
-    const totalCross = PAD * 2 + maxCrossSpan;
+    function layoutSingleComponent(compNodes) {
+      const compIdSet = new Set(compNodes.map((n) => n.id));
+      const inDeg = new Map();
+      const parentsOf = new Map();
+      const childrenOf = new Map();
+
+      for (const n of compNodes) {
+        inDeg.set(n.id, 0);
+        parentsOf.set(n.id, []);
+        childrenOf.set(n.id, []);
+      }
+
+      for (const e of edges) {
+        if (!compIdSet.has(e.from) || !compIdSet.has(e.to)) continue;
+        childrenOf.get(e.from).push(e.to);
+        parentsOf.get(e.to).push(e.from);
+        inDeg.set(e.to, (inDeg.get(e.to) || 0) + 1);
+      }
+
+      // Assign layer = longest path from component roots
+      const layerMap = new Map();
+      const queue = [];
+      for (const n of compNodes) {
+        if ((inDeg.get(n.id) || 0) === 0) {
+          layerMap.set(n.id, 0);
+          queue.push(n.id);
+        }
+      }
+      if (queue.length === 0 && compNodes.length > 0) {
+        layerMap.set(compNodes[0].id, 0);
+        queue.push(compNodes[0].id);
+      }
+
+      const remIn = new Map(inDeg);
+      const visited = new Set();
+      while (queue.length > 0) {
+        const u = queue.shift();
+        visited.add(u);
+        const uLayer = layerMap.get(u) || 0;
+        for (const v of childrenOf.get(u) || []) {
+          const nextL = Math.max(layerMap.get(v) || 0, uLayer + 1);
+          layerMap.set(v, nextL);
+          const r = (remIn.get(v) || 1) - 1;
+          remIn.set(v, r);
+          if (r <= 0 && !visited.has(v)) {
+            queue.push(v);
+          }
+        }
+      }
+
+      for (const n of compNodes) {
+        if (!layerMap.has(n.id)) {
+          layerMap.set(n.id, 0);
+        }
+      }
+
+      const maxLayer = Math.max(0, ...layerMap.values());
+      const layers = Array.from({ length: maxLayer + 1 }, () => []);
+      for (const n of compNodes) {
+        layers[layerMap.get(n.id)].push(n);
+      }
+
+      for (const layer of layers) {
+        layer.sort((a, b) => (a.createdOrder ?? 0) - (b.createdOrder ?? 0));
+      }
+
+      // 2-pass barycenter sweep within this component to reduce edge crossings
+      for (let l = 1; l <= maxLayer; l++) {
+        const prevIdx = new Map(layers[l - 1].map((n, i) => [n.id, i]));
+        layers[l].sort((a, b) => {
+          const pA = (parentsOf.get(a.id) || []).filter((id) =>
+            prevIdx.has(id)
+          );
+          const pB = (parentsOf.get(b.id) || []).filter((id) =>
+            prevIdx.has(id)
+          );
+          const bA =
+            pA.length > 0
+              ? pA.reduce((s, id) => s + prevIdx.get(id), 0) / pA.length
+              : 999;
+          const bB =
+            pB.length > 0
+              ? pB.reduce((s, id) => s + prevIdx.get(id), 0) / pB.length
+              : 999;
+          return bA - bB || (a.createdOrder ?? 0) - (b.createdOrder ?? 0);
+        });
+      }
+
+      const maxNodesInLayer = Math.max(1, ...layers.map((l) => l.length));
+      const compCrossSpan =
+        maxNodesInLayer * NODE_W + (maxNodesInLayer - 1) * GAP_CROSS;
+      const compMainSpan = (maxLayer + 1) * NODE_H + maxLayer * GAP_MAIN;
+
+      const localPositions = new Map();
+      layers.forEach((layer, lIdx) => {
+        const count = layer.length;
+        const layerSpan = count * NODE_W + Math.max(0, count - 1) * GAP_CROSS;
+        const startCross = (compCrossSpan - layerSpan) / 2;
+        const mainCoord = lIdx * (NODE_H + GAP_MAIN);
+
+        layer.forEach((node, idx) => {
+          const crossCoord = startCross + idx * (NODE_W + GAP_CROSS);
+          localPositions.set(node.id, {
+            x: crossCoord,
+            y: mainCoord,
+            w: NODE_W,
+            h: NODE_H,
+          });
+        });
+      });
+
+      return {
+        localPositions,
+        width: compCrossSpan,
+        height: compMainSpan,
+      };
+    }
+
+    const positions = new Map();
+    let currentX = PAD;
+    let maxComponentHeight = 0;
+
+    components.forEach((comp, idx) => {
+      if (idx > 0) {
+        currentX += COMPONENT_GAP_X;
+      }
+      const compLayout = layoutSingleComponent(comp.nodes);
+      for (const [nodeId, pos] of compLayout.localPositions.entries()) {
+        positions.set(nodeId, {
+          x: currentX + pos.x,
+          y: PAD + pos.y,
+          w: pos.w,
+          h: pos.h,
+        });
+      }
+      currentX += compLayout.width;
+      if (compLayout.height > maxComponentHeight) {
+        maxComponentHeight = compLayout.height;
+      }
+    });
+
+    const totalCross = currentX + PAD;
+    const totalMain = PAD * 2 + maxComponentHeight;
 
     return {
       positions,
@@ -872,6 +965,7 @@
         if (state.statusFilter === 'blocked') return t.isBlocked;
         return t.status === state.statusFilter;
       });
+
     }
     const visibleIdSet = new Set(visibleNodes.map((n) => n.id));
     const visibleEdges = sub.edges.filter(
