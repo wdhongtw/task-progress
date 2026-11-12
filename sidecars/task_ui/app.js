@@ -38,6 +38,7 @@
     activeView: 'graph', // 'graph' | 'list'
     statusFilter: 'all', // 'all' | 'in_progress' | 'pending' | 'completed' | 'blocked' | 'cancelled'
     graphRadius: 'all', // '1' | '2' | '3' | 'all'
+    hideCancelledInGraph: false,
     zoom: 1,
     panX: 0,
     panY: 0,
@@ -965,7 +966,8 @@
         if (state.statusFilter === 'blocked') return t.isBlocked;
         return t.status === state.statusFilter;
       });
-
+    } else if (state.hideCancelledInGraph) {
+      visibleNodes = visibleNodes.filter((t) => t.status !== 'cancelled');
     }
     const visibleIdSet = new Set(visibleNodes.map((n) => n.id));
     const visibleEdges = sub.edges.filter(
@@ -997,7 +999,7 @@
 
     const layout = computeDagLayout(visibleNodes, visibleEdges);
 
-    const layoutKey = `${state.graphRadius}::${
+    const layoutKey = `${state.graphRadius}::${state.hideCancelledInGraph}::${
       sub.isFiltered ? state.focusedTaskId : ''
     }::${visibleNodes.map((n) => n.id).join(',')}`;
     const shouldAutoFit = !state.hasFittedGraph || state.lastLayoutKey !== layoutKey;
@@ -1496,6 +1498,11 @@
               state.statusFilter = 'all';
             }
           }
+          if (state.hideCancelledInGraph && matched.status === 'cancelled') {
+            state.hideCancelledInGraph = false;
+            const chk = $('chk-hide-cancelled');
+            if (chk) chk.checked = false;
+          }
         }
       }
 
@@ -1600,6 +1607,11 @@
 
   $('btn-zoom-fit')?.addEventListener('click', () => {
     state.hasFittedGraph = false;
+    renderGraphView();
+  });
+
+  $('chk-hide-cancelled')?.addEventListener('change', (e) => {
+    state.hideCancelledInGraph = Boolean(e.target.checked);
     renderGraphView();
   });
 
