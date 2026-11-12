@@ -11,7 +11,8 @@
       {
         "path": "/",
         "entrypoint": "SIDECAR_UI_ENTRYPOINT_AUX_PANE",
-        "title": "Task Progress"
+        "title": "Task Progress",
+        "file_extensions": [".task-progress"]
       },
       {
         "path": "/fullscreen",

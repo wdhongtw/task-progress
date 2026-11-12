@@ -71,11 +71,21 @@ export task trees into Markdown nested lists.
   - Use `algo: "dfs"` when each top-level branch should be expanded deeply
     before moving to sibling branches.
 
-## Opening the Interactive AuxPane UI
+## Citing Tasks & Opening the Interactive AuxPane UI
 
-Include a clickable sidecar pill in chat when the user wants to view or explore
-the task graph visually:
+- **Citing a specific task**: Every task returned by `task_*` MCP tools includes
+  `sidecarUri` and `markdownPill`. Format task references in chat responses and
+  Markdown artifacts as:
 
-```markdown
-[Task Progress](sidecar://task-progress/task_ui/)
-```
+  ```markdown
+  [`#<task-id>` · <title>](sidecar://task-progress/task_ui/?task=<task-id>&auto_open=false)
+  ```
+
+  Clicking the pill opens the Task Progress AuxPane and focuses `<task-id>` in
+  the Graph/List view and Focused Task inspector.
+
+- **Opening the overall Task Progress panel**:
+
+  ```markdown
+  [Task Progress](sidecar://task-progress/task_ui/)
+  ```

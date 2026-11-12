@@ -23,7 +23,10 @@ the `task-progress` skill for detailed lifecycle and export workflows):
   registration or calling `task_focus`), and store relevant `http(s)://` URLs in
   `metadata` (`str -> str` mapping) so the Focused Task inspector renders
   clickable links.
-- **Interactive AuxPane UI**: Include
-  `[Task Progress](sidecar://task-progress/task_ui/)` in chat when surfacing or
-  summarizing the task graph so the user can open the visual DAG panel in one
-  click.
+- **Clickable task & AuxPane UI pills**: Format references to individual tasks
+  in chat and Markdown artifacts as
+  ``[`#<task-id>` · <title>](sidecar://task-progress/task_ui/?task=<task-id>&auto_open=false)``
+  (returned as `markdownPill` in `task_*` tool outputs) so clicking the pill
+  opens the Task Progress AuxPane focused on that task, and include
+  `[Task Progress](sidecar://task-progress/task_ui/)` when surfacing or
+  summarizing the overall task graph.

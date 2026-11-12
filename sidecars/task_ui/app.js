@@ -48,7 +48,114 @@
     sortOrder: 'asc',
     detailCollapsed: false,
     uiAssetVersion: '',
+    pendingDeepLink: null,
   };
+
+  const TASK_ICON_DATA_URI =
+    "data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128' width='16' height='16' fill='none'%3E%3Cpath d='M 74.57 12.06 A 53 53 0 0 1 112.60 85.13' stroke='%2310b981' stroke-width='15' stroke-linecap='round'/%3E%3Cpath d='M 100.48 102.44 A 53 53 0 0 1 42.02 112.23' stroke='%2306b6d4' stroke-width='15' stroke-linecap='round'/%3E%3Cpath d='M 24.92 99.81 A 53 53 0 0 1 14.04 46.31' stroke='%233b82f6' stroke-width='15' stroke-linecap='round'/%3E%3Cpath d='M 24.92 28.19 A 53 53 0 0 1 53.43 12.06' stroke='%2371717a' stroke-width='15' stroke-linecap='round'/%3E%3Cpath d='M64 42L42 79M64 42L86 79' stroke='%23cbd5e1' stroke-width='8.5' stroke-linecap='round'/%3E%3Ccircle cx='64' cy='40' r='14' fill='%232563eb' stroke='%2393c5fd' stroke-width='3.5'/%3E%3Ccircle cx='64' cy='40' r='5.5' fill='%23fde047'/%3E%3Ccircle cx='42' cy='79' r='14' fill='%23059669' stroke='%236ee7b7' stroke-width='3.5'/%3E%3Cpath d='M36.5 79L40.5 83L48.5 75' stroke='%23ecfdf5' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='86' cy='79' r='14' fill='%230891b2' stroke='%2367e8f9' stroke-width='3.5'/%3E%3C/svg%3E";
+
+  function buildTaskSidecarLink(task) {
+    if (!task || !task.id) {
+      return {
+        sidecarUri: '',
+        markdownPill: '',
+        scopeItemLink: '',
+        lexicalClipboardJson: '',
+      };
+    }
+    const sidecarUri =
+      task.sidecarUri ||
+      `sidecar://task-progress/task_ui/?task=${encodeURIComponent(
+        task.id
+      )}&auto_open=false`;
+    const fileUri = `file:///task-progress/${encodeURIComponent(
+      task.id
+    )}.task-progress`;
+    const cleanTitle = String(task.title ?? '').trim();
+    const markdownLabel =
+      cleanTitle && cleanTitle !== task.id
+        ? `\`#${task.id}\` · ${cleanTitle}`
+        : `\`#${task.id}\``;
+    const pillLabel =
+      cleanTitle && cleanTitle !== task.id
+        ? `#${task.id} · ${cleanTitle}`
+        : `#${task.id}`;
+    const markdownPill =
+      task.markdownPill || `[${markdownLabel}](${sidecarUri})`;
+    const scopeItemLink = `[${pillLabel}](dynamicContext;${fileUri})`;
+    const statusText = statusDisplayLabel(task.status);
+    const descParts = [`Status: ${statusText}`];
+    if (task.isBlocked) descParts.push('Blocked');
+    if (task.directTotalCount > 0) {
+      descParts.push(
+        `Subtasks: ${task.directCompletedCount}/${task.directTotalCount} done`
+      );
+    }
+    const scopeItemJson = JSON.stringify({
+      dynamicContext: {
+        providerLabel: 'task-progress',
+        itemLabel: pillLabel,
+        uri: fileUri,
+        itemValue: sidecarUri,
+        iconUri: TASK_ICON_DATA_URI,
+        description: descParts.join(' · '),
+      },
+    });
+    const lexicalClipboardJson = JSON.stringify({
+      namespace: 'Input',
+      nodes: [
+        {
+          trigger: '@',
+          value: 'contextScopeItemMention',
+          data: { data: scopeItemJson },
+          type: 'contextScopeItemMention',
+          version: 1,
+        },
+        {
+          detail: 0,
+          format: 0,
+          mode: 'normal',
+          style: '',
+          text: ' ',
+          type: 'text',
+          version: 1,
+        },
+      ],
+    });
+    return {
+      sidecarUri,
+      markdownPill,
+      scopeItemLink,
+      lexicalClipboardJson,
+    };
+  }
+
+  function consumeUrlDeepLinkParams() {
+    const params = new URLSearchParams(window.location.search);
+    let rawTask = (params.get('task') || '').trim();
+    if (!rawTask) {
+      const rawFile = (params.get('file') || '').trim();
+      const m = /(?:^|\/)([^/?#]+)\.task-progress$/i.exec(rawFile);
+      if (m) {
+        try {
+          rawTask = decodeURIComponent(m[1]).trim();
+        } catch {
+          rawTask = m[1].trim();
+        }
+      }
+    }
+    if (!rawTask) return;
+    state.pendingDeepLink = { taskId: rawTask };
+    try {
+      const nextUrl = new URL(window.location.href);
+      nextUrl.searchParams.delete('task');
+      nextUrl.searchParams.delete('file');
+      nextUrl.searchParams.delete('auto_open');
+      window.history.replaceState(null, '', nextUrl.toString());
+    } catch {
+      // Ignore history replace errors
+    }
+  }
 
   function esc(str) {
     return String(str ?? '').replace(/[&<>"']/g, (c) => ({
@@ -91,6 +198,41 @@
       document.body.removeChild(ta);
       showToast(label);
     }
+  }
+
+  async function copyTaskPillToClipboard(task) {
+    const { scopeItemLink, lexicalClipboardJson } = buildTaskSidecarLink(task);
+    if (!scopeItemLink) return;
+    const label = `Copied task pill for #${task.id}`;
+    const onCopy = (e) => {
+      if (!e.clipboardData) return;
+      e.preventDefault();
+      e.clipboardData.setData('text/plain', scopeItemLink);
+      if (lexicalClipboardJson) {
+        e.clipboardData.setData(
+          'application/x-lexical-editor',
+          lexicalClipboardJson
+        );
+      }
+    };
+    document.addEventListener('copy', onCopy, { once: true });
+    let copied = false;
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = scopeItemLink;
+      ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0;';
+      document.body.appendChild(ta);
+      ta.select();
+      copied = document.execCommand('copy');
+      document.body.removeChild(ta);
+    } finally {
+      document.removeEventListener('copy', onCopy);
+    }
+    if (copied) {
+      showToast(label);
+      return;
+    }
+    await copyText(scopeItemLink, label);
   }
 
   function openFileInAuxPane(filePath) {
@@ -945,6 +1087,9 @@
               <span class="status-badge ${esc(t.status)}">${esc(
           statusDisplayLabel(t.status)
         )}</span>
+              <button type="button" class="ghost-btn xs" data-copy-task-link="${esc(
+                t.id
+              )}" title="Copy clickable Markdown task pill">🔗 Link</button>
             </div>
           </div>
           <div class="task-row-meta">
@@ -1237,7 +1382,42 @@
         state.focusedTaskId = '';
       }
 
+      let deepLinkedTask = null;
+      if (state.pendingDeepLink && state.tasks.length > 0) {
+        const targetId = state.pendingDeepLink.taskId;
+        state.pendingDeepLink = null;
+        const matched = state.tasks.find((t) => t.id === targetId);
+        if (matched) {
+          deepLinkedTask = matched;
+          state.focusedTaskId = matched.id;
+          state.userUnfocused = false;
+          state.detailCollapsed = false;
+          state.hasFittedGraph = false;
+          if (state.statusFilter !== 'all') {
+            const visibleUnderFilter =
+              state.statusFilter === 'blocked'
+                ? matched.isBlocked
+                : matched.status === state.statusFilter;
+            if (!visibleUnderFilter) {
+              state.statusFilter = 'all';
+            }
+          }
+        }
+      }
+
       renderAll();
+
+      if (deepLinkedTask) {
+        if (state.activeView === 'list') {
+          requestAnimationFrame(() => {
+            const rowEl = document.querySelector(
+              `.task-row[data-task-id="${CSS.escape(deepLinkedTask.id)}"]`
+            );
+            rowEl?.scrollIntoView({ behavior: 'auto', block: 'center' });
+          });
+        }
+        showToast(`Focused #${deepLinkedTask.id}`);
+      }
     } catch (err) {
       console.error('[task_ui] fetchState error:', err);
     }
@@ -1259,6 +1439,17 @@
         b.classList.toggle('active', b === radiusBtn);
       }
       renderAll();
+      return;
+    }
+
+    const copyTaskLinkBtn = e.target.closest('[data-copy-task-link]');
+    if (copyTaskLinkBtn) {
+      e.stopPropagation();
+      const id = copyTaskLinkBtn.dataset.copyTaskLink;
+      const task = state.tasks.find((t) => t.id === id);
+      if (task) {
+        copyTaskPillToClipboard(task);
+      }
       return;
     }
 
@@ -1340,6 +1531,14 @@
     renderListView();
   });
 
+  $('btn-copy-focused-link')?.addEventListener('click', () => {
+    const task = state.focusedTaskId
+      ? state.tasks.find((t) => t.id === state.focusedTaskId)
+      : null;
+    if (!task) return;
+    copyTaskPillToClipboard(task);
+  });
+
   $('btn-detail-toggle')?.addEventListener('click', () => {
     state.detailCollapsed = !state.detailCollapsed;
     renderDetailPanel();
@@ -1416,6 +1615,7 @@
     await fetchState();
   }
 
+  consumeUrlDeepLinkParams();
   refreshIfActive();
 
   window.addEventListener('focus', () => {

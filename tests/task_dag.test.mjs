@@ -3,6 +3,7 @@ import {
   applyTaskAction,
   buildEnrichedDagState,
   buildSpanningTree,
+  buildTaskSidecarLink,
   createEmptyFoldState,
   exportTaskTreeMarkdown,
   extractTaskStepAction,
@@ -779,6 +780,32 @@ test('metadata enforces str -> str mapping and supports key deletion', () => {
     priority: 'P0',
     file: '/abs/path.js',
   });
+});
+
+test('buildTaskSidecarLink and buildEnrichedDagState populate canonical sidecarUri and markdownPill', () => {
+  const link = buildTaskSidecarLink('demo-task', 'Implement Feature');
+  assert.equal(
+    link.sidecarUri,
+    'sidecar://task-progress/task_ui/?task=demo-task&auto_open=false'
+  );
+  assert.equal(
+    link.markdownPill,
+    '[`#demo-task` · Implement Feature](sidecar://task-progress/task_ui/?task=demo-task&auto_open=false)'
+  );
+
+  const fold = createEmptyFoldState();
+  applyTaskAction(
+    fold,
+    {
+      toolName: 'task_register',
+      args: { id: 'demo-task', title: 'Implement Feature' },
+    },
+    1
+  );
+  const state = buildEnrichedDagState(fold);
+  assert.equal(state.tasks.length, 1);
+  assert.equal(state.tasks[0].sidecarUri, link.sidecarUri);
+  assert.equal(state.tasks[0].markdownPill, link.markdownPill);
 });
 
 let failed = 0;
