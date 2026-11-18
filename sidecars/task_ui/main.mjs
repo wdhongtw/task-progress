@@ -56,8 +56,7 @@ for (const [route, [file, contentType]] of Object.entries(STATIC_ASSETS)) {
 app.api(
   '/api/state',
   async (data) => {
-    const conversationId =
-      data.conversationId || app.config.conversationId || '';
+    const conversationId = String(data.conversationId || '').trim();
     const state = await getSessionTaskState(conversationId);
     const centerTaskId = data.centerTaskId || state.focusedTaskId || '';
     const radius = data.radius ?? 'all';
@@ -84,8 +83,7 @@ app.api(
 app.api(
   '/api/export-tree',
   async (data) => {
-    const conversationId =
-      data.conversationId || app.config.conversationId || '';
+    const conversationId = String(data.conversationId || '').trim();
     const state = await getSessionTaskState(conversationId);
     const rootId = data.rootId ?? data.root_id ?? state.focusedTaskId ?? '';
     return exportTaskTreeMarkdown(state, rootId, {

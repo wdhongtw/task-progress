@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   applyTaskAction,
   buildEnrichedDagState,
@@ -445,290 +448,161 @@ test('spanning tree export formats A > B > D and A > C and handles diamond DAGs 
   assert.match(bfsExport.markdown, /^  - \[x\] \*\*Task C\*\* \(`C`\)/m);
 });
 
-test('getSessionTaskState folds trajectory steps with fork inheritance and handleToolCall integration', async () => {
-  const trajectoryData = {
-    ok: true,
-    metadata: { projectId: 'proj-demo' },
-    parentReferences: [{ conversationId: 'parent-conv-1', stepIndex: 1 }],
-    steps: [
-      {
-        type: 'CORTEX_STEP_TYPE_GENERIC',
-        status: 'CORTEX_STEP_STATUS_DONE',
-        metadata: {
-          createdAt: '2026-11-03T01:00:00Z',
-          toolCall: {
-            id: 'tc-1',
-            name: 'mcp_task-progress_task_task_register',
-            argumentsJson: JSON.stringify({
-              id: 'sub-1',
-              title: 'Inherited Subtask',
-              status: 'completed',
-            }),
-          },
-        },
-      },
-      {
-        type: 'CORTEX_STEP_TYPE_GENERIC',
-        status: 'CORTEX_STEP_STATUS_DONE',
-        metadata: {
-          createdAt: '2026-11-03T01:01:00Z',
-          toolCall: {
-            id: 'tc-2',
-            name: 'mcp_task-progress_task_task_register',
-            argumentsJson: JSON.stringify({
-              id: 'root-1',
-              title: 'Inherited Root Task',
-              status: 'in_progress',
-              depends_on: ['sub-1'],
-            }),
-          },
-        },
-      },
-      {
-        type: 'CORTEX_STEP_TYPE_GENERIC',
-        status: 'CORTEX_STEP_STATUS_DONE',
-        metadata: {
-          createdAt: '2026-11-03T01:02:00Z',
-          toolCall: {
-            id: 'tc-3',
-            name: 'mcp_task-progress_task_task_complete',
-            argumentsJson: JSON.stringify({
-              id: 'root-1',
-              note: 'Done after fork',
-            }),
-          },
-        },
-      },
-    ],
-  };
+test('getSessionTaskState and handleToolCall persist per-session task DAG in PLUGIN_DATA', async () => {
+  const pluginDataDir = mkdtempSync(join(tmpdir(), 'task-progress-test-'));
+  try {
+    const convId = 'conv-plugin-data-1';
+    const meta = { 'antigravity.google/conversation_id': convId };
 
-  const state = await getSessionTaskState('child-conv-2', null, {
-    trajectoryData,
+    const regSub = await handleToolCall(
+      {
+        name: 'task_register',
+        arguments: {
+          id: 'sub-1',
+          title: 'Subtask 1',
+          status: 'completed',
+        },
+        _meta: meta,
+      },
+      { pluginDataDir }
+    );
+    assert.equal(regSub.isError, false);
+
+    const regRoot = await handleToolCall(
+      {
+        name: 'task_register',
+        arguments: {
+          id: 'root-1',
+          title: 'Root Task 1',
+          status: 'in_progress',
+          depends_on: ['sub-1'],
+        },
+        _meta: meta,
+      },
+      { pluginDataDir }
+    );
+    assert.equal(regRoot.isError, false);
+
+    const compRoot = await handleToolCall(
+      {
+        name: 'task_complete',
+        arguments: {
+          id: 'root-1',
+          note: 'Completed in session',
+        },
+        _meta: meta,
+      },
+      { pluginDataDir }
+    );
+    assert.equal(compRoot.isError, false);
+
+    const state = await getSessionTaskState(convId, null, { pluginDataDir });
+    assert.equal(state.summary.total, 2);
+    assert.equal(state.summary.completed, 2);
+    assert.equal(state.summary.completionPercent, 100);
+
+    const rootTask = state.tasks.find((t) => t.id === 'root-1');
+    assert.equal(rootTask.status, 'completed');
+    assert.equal(rootTask.metadata.completionNote, 'Completed in session');
+
+    const mcpRes = await handleToolCall(
+      {
+        name: 'task_export_tree',
+        arguments: { root_id: 'root-1', algo: 'bfs' },
+        _meta: meta,
+      },
+      { pluginDataDir }
+    );
+    assert.equal(mcpRes.isError, false);
+    const parsed = JSON.parse(mcpRes.content[0].text);
+    assert.equal(parsed.ok, true);
+    assert.match(parsed.markdown, /Root Task 1/);
+    assert.match(parsed.markdown, /Subtask 1/);
+  } finally {
+    rmSync(pluginDataDir, { recursive: true, force: true });
+  }
+});
+
+test('task_delete removes task and cleans up parent depends_on references', async () => {
+  const pluginDataDir = mkdtempSync(join(tmpdir(), 'task-progress-del-'));
+  try {
+    const convId = 'conv-delete-1';
+    const meta = { 'antigravity.google/conversation_id': convId };
+
+    await handleToolCall(
+      {
+        name: 'task_register',
+        arguments: { id: 'D', title: 'Task D' },
+        _meta: meta,
+      },
+      { pluginDataDir }
+    );
+    await handleToolCall(
+      {
+        name: 'task_register',
+        arguments: { id: 'B', title: 'Task B', depends_on: ['D'] },
+        _meta: meta,
+      },
+      { pluginDataDir }
+    );
+    await handleToolCall(
+      {
+        name: 'task_register',
+        arguments: { id: 'A', title: 'Task A', depends_on: ['B'] },
+        _meta: meta,
+      },
+      { pluginDataDir }
+    );
+
+    const delRes = await handleToolCall(
+      {
+        name: 'task_delete',
+        arguments: { id: 'B' },
+        _meta: meta,
+      },
+      { pluginDataDir }
+    );
+    assert.equal(delRes.isError, false);
+    const parsed = JSON.parse(delRes.content[0].text);
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.deletedTaskId, 'B');
+    assert.equal(parsed.summary.total, 2);
+
+    const state = await getSessionTaskState(convId, null, { pluginDataDir });
+    const taskA = state.tasks.find((t) => t.id === 'A');
+    assert.deepEqual(taskA.dependsOn, []);
+  } finally {
+    rmSync(pluginDataDir, { recursive: true, force: true });
+  }
+});
+
+test('extractTaskStepAction parses historical DONE MCP tool steps', () => {
+  const action = extractTaskStepAction({
+    type: 'CORTEX_STEP_TYPE_MCP_TOOL',
+    status: 'CORTEX_STEP_STATUS_DONE',
+    mcpTool: {
+      toolCall: {
+        id: 'tc-1',
+        name: 'mcp_task-progress_task_task_register',
+        argumentsJson: JSON.stringify({ id: 't1', title: 'Task 1' }),
+      },
+    },
   });
-  assert.equal(state.isForkedSession, true);
-  assert.equal(state.parentConversationId, 'parent-conv-1');
-  assert.equal(state.summary.total, 2);
-  assert.equal(state.summary.completed, 2);
-  assert.equal(state.summary.completionPercent, 100);
+  assert.equal(action.toolName, 'task_register');
+  assert.equal(action.args.id, 't1');
 
-  const rootTask = state.tasks.find((t) => t.id === 'root-1');
-  assert.equal(rootTask.inheritedFromFork, true);
-  assert.equal(rootTask.status, 'completed');
-
-  // Test MCP handleToolCall export_tree
-  const mcpRes = await handleToolCall(
-    {
-      name: 'task_export_tree',
-      arguments: { root_id: 'root-1', algo: 'bfs' },
-    },
-    { trajectoryData }
-  );
-  assert.equal(mcpRes.isError, false);
-  const parsed = JSON.parse(mcpRes.content[0].text);
-  assert.equal(parsed.ok, true);
-  assert.match(parsed.markdown, /Inherited Root Task/);
-  assert.match(parsed.markdown, /Inherited Subtask/);
-});
-
-test('task_delete removes task and cleans up parent depends_on references', () => {
-  const fold = createEmptyFoldState();
-  applyTaskAction(
-    fold,
-    { toolName: 'task_register', args: { id: 'D', title: 'Task D' } },
-    1
-  );
-  applyTaskAction(
-    fold,
-    {
-      toolName: 'task_register',
-      args: { id: 'B', title: 'Task B', depends_on: ['D'] },
-    },
-    2
-  );
-  applyTaskAction(
-    fold,
-    {
-      toolName: 'task_register',
-      args: { id: 'A', title: 'Task A', depends_on: ['B'] },
-    },
-    3
-  );
-
-  // Delete B -> A's dependsOn should no longer include B
-  const delRes = applyTaskAction(
-    fold,
-    { toolName: 'task_delete', args: { id: 'B' } },
-    4
-  );
-  assert.equal(delRes.ok, true);
-  assert.equal(delRes.deletedTaskId, 'B');
-  assert.equal(fold.tasks.has('B'), false);
-  assert.deepEqual(fold.tasks.get('A').dependsOn, []);
-});
-
-test('handleToolCall task_delete ignores in-flight CORTEX_STEP_STATUS_RUNNING trajectory step', async () => {
-  const trajectoryData = {
-    ok: true,
-    metadata: { projectId: 'proj-demo' },
-    parentReferences: [],
-    steps: [
-      {
-        type: 'CORTEX_STEP_TYPE_GENERIC',
-        status: 'CORTEX_STEP_STATUS_DONE',
-        metadata: {
-          createdAt: '2026-11-04T15:00:00Z',
-          toolCall: {
-            id: 'tc-reg-1',
-            name: 'mcp_task-progress_task_task_register',
-            argumentsJson: JSON.stringify({
-              id: 'phase-1-child-bug',
-              title: 'Phase 1',
-              status: 'completed',
-            }),
-          },
-        },
-      },
-      {
-        type: 'CORTEX_STEP_TYPE_GENERIC',
-        status: 'CORTEX_STEP_STATUS_DONE',
-        metadata: {
-          createdAt: '2026-11-04T15:01:00Z',
-          toolCall: {
-            id: 'tc-reg-2',
-            name: 'mcp_task-progress_task_task_register',
-            argumentsJson: JSON.stringify({
-              id: 'phase-2-main-impl',
-              title: 'Phase 2',
-              status: 'pending',
-              depends_on: ['phase-1-child-bug'],
-            }),
-          },
-        },
-      },
-      {
-        type: 'CORTEX_STEP_TYPE_GENERIC',
-        status: 'CORTEX_STEP_STATUS_RUNNING',
-        metadata: {
-          createdAt: '2026-11-04T15:02:00Z',
-          toolCall: {
-            id: 'tc-del-inflight',
-            name: 'mcp_task-progress_task_task_delete',
-            argumentsJson: JSON.stringify({
-              id: 'phase-2-main-impl',
-            }),
-          },
-        },
-      },
-    ],
-  };
-
-  const mcpRes = await handleToolCall(
-    {
-      name: 'task_delete',
-      arguments: { id: 'phase-2-main-impl' },
-    },
-    { trajectoryData }
-  );
-  assert.equal(mcpRes.isError, false);
-  const parsed = JSON.parse(mcpRes.content[0].text);
-  assert.equal(parsed.ok, true);
-  assert.equal(parsed.deletedTaskId, 'phase-2-main-impl');
-  assert.equal(parsed.summary.total, 1);
-});
-
-test('handleToolCall preserves committed in-flight state across parallel RUNNING calls in the same turn', async () => {
-  const convId = 'conv-parallel-inflight';
-  const steps = [
-    {
-      type: 'CORTEX_STEP_TYPE_GENERIC',
-      status: 'CORTEX_STEP_STATUS_RUNNING',
-      metadata: {
-        createdAt: '2026-11-04T16:00:00Z',
-        toolCall: {
-          id: 'tc-par-1',
-          name: 'mcp_task-progress_task_task_register',
-          argumentsJson: JSON.stringify({
-            id: 'leaf-sub',
-            title: 'Leaf Subtask',
-            status: 'completed',
-          }),
-        },
+  const running = extractTaskStepAction({
+    type: 'CORTEX_STEP_TYPE_MCP_TOOL',
+    status: 'CORTEX_STEP_STATUS_RUNNING',
+    mcpTool: {
+      toolCall: {
+        id: 'tc-2',
+        name: 'mcp_task-progress_task_task_register',
+        argumentsJson: JSON.stringify({ id: 't2', title: 'Task 2' }),
       },
     },
-    {
-      type: 'CORTEX_STEP_TYPE_GENERIC',
-      status: 'CORTEX_STEP_STATUS_RUNNING',
-      metadata: {
-        createdAt: '2026-11-04T16:00:01Z',
-        toolCall: {
-          id: 'tc-par-2',
-          name: 'mcp_task-progress_task_task_register',
-          argumentsJson: JSON.stringify({
-            id: 'parent-root',
-            title: 'Parent Root',
-            status: 'in_progress',
-            depends_on: ['leaf-sub'],
-          }),
-        },
-      },
-    },
-  ];
-  const trajectoryData = {
-    ok: true,
-    metadata: { projectId: 'proj-demo' },
-    parentReferences: [],
-    steps,
-  };
-
-  // Call 1 executes while both tc-par-1 and tc-par-2 are RUNNING
-  const res1 = await handleToolCall(
-    {
-      name: 'task_register',
-      arguments: {
-        id: 'leaf-sub',
-        title: 'Leaf Subtask',
-        status: 'completed',
-      },
-      _meta: { 'antigravity.google/conversation_id': convId },
-    },
-    { trajectoryData }
-  );
-  assert.equal(res1.isError, false);
-  const parsed1 = JSON.parse(res1.content[0].text);
-  assert.equal(parsed1.summary.total, 1);
-
-  // Call 2 executes immediately while tc-par-1 is STILL RUNNING in trajectory
-  const res2 = await handleToolCall(
-    {
-      name: 'task_register',
-      arguments: {
-        id: 'parent-root',
-        title: 'Parent Root',
-        status: 'in_progress',
-        depends_on: ['leaf-sub'],
-      },
-      _meta: { 'antigravity.google/conversation_id': convId },
-    },
-    { trajectoryData }
-  );
-  assert.equal(res2.isError, false);
-  const parsed2 = JSON.parse(res2.content[0].text);
-  assert.equal(parsed2.summary.total, 2);
-
-  // Once both steps transition to DONE, task_list folds them cleanly without duplication
-  steps[0].status = 'CORTEX_STEP_STATUS_DONE';
-  steps[1].status = 'CORTEX_STEP_STATUS_DONE';
-  const listRes = await handleToolCall(
-    {
-      name: 'task_list',
-      arguments: {},
-      _meta: { 'antigravity.google/conversation_id': convId },
-    },
-    { trajectoryData }
-  );
-  assert.equal(listRes.isError, false);
-  const parsedList = JSON.parse(listRes.content[0].text);
-  assert.equal(parsedList.summary.total, 2);
+  });
+  assert.equal(running, null);
 });
 
 test('metadata enforces str -> str mapping and supports key deletion', () => {

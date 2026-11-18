@@ -5,6 +5,9 @@
       "args": [
         "${PLUGIN_ROOT}/mcp/task_mcp.mjs"
       ],
+      "env": {
+        "PLUGIN_DATA": "${PLUGIN_DATA}"
+      },
       "tools": {
         "task_register": {
           "eager": true

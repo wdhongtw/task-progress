@@ -5,10 +5,10 @@ exporting per-session task dependency graphs (DAGs).
 
 ## Features
 
-- **Per-Session Trajectory State with Fork Inheritance**:
-  - Tasks and dependencies are persisted directly in conversation trajectory
-    steps (`task_*` MCP tool calls), automatically inheriting task progress up
-    to the branch point when a conversation is forked.
+- **Per-Session State Persistence**:
+  - Tasks and dependencies are persisted per conversation in
+    `${PLUGIN_DATA}/sessions/<conversationId>.json` and shared between the MCP
+    server and AuxPane UI sidecar.
 - **DAG Dependency & Completion Semantics (`A > B > D` and `A > C`)**:
   - Express subtask dependencies via `depends_on`. If `A` depends on `B` and `C`
     and `B` depends on `D`, then `B`, `C`, and `D` must all be `completed`

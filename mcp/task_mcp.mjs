@@ -5,9 +5,7 @@
  * focus, list, and export task dependency trees (DAGs) for the active chat
  * session.
  *
- * All session task state is persisted natively inside the per-conversation
- * Trajectory (`CortexStepMcpTool` steps) rather than on the filesystem, so it
- * is automatically inherited when a chat session is forked in the client.
+ * Session task state is persisted in `${PLUGIN_DATA}/sessions/<conversationId>.json`.
  */
 
 import {
@@ -349,11 +347,9 @@ export async function handleToolCall(params, options = {}) {
   const rawToolName = params?.name || '';
   const args = params?.arguments || {};
   const meta = params?._meta || {};
-  const conversationId =
-    meta['antigravity.google/conversation_id'] ||
-    args.conversation_id ||
-    process.env.ANTIGRAVITY_CONVERSATION_ID ||
-    '';
+  const conversationId = String(
+    meta['antigravity.google/conversation_id'] || ''
+  ).trim();
 
   const match =
     /(?:^|_)(task_(?:register|update|complete|delete|focus|list|export_tree))$/.exec(
@@ -431,8 +427,6 @@ export async function handleToolCall(params, options = {}) {
     const payload = {
       ok: true,
       conversationId,
-      isForkedSession: state.isForkedSession,
-      parentConversationId: state.parentConversationId,
       focusedTaskId: state.focusedTaskId,
       sortBy,
       order,

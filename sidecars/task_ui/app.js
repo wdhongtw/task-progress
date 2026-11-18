@@ -19,8 +19,6 @@
 
   const state = {
     conversationId: boundConversationId,
-    isForkedSession: false,
-    parentConversationId: '',
     tasks: [],
     edges: [],
     summary: {
@@ -1450,8 +1448,6 @@
         state.uiAssetVersion = data.uiAssetVersion;
       }
 
-      state.isForkedSession = Boolean(data.isForkedSession);
-      state.parentConversationId = data.parentConversationId || '';
       state.tasks = Array.isArray(data.tasks) ? data.tasks : [];
       state.edges = Array.isArray(data.edges) ? data.edges : [];
       if (data.summary) {
