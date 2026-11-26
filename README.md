@@ -1,7 +1,7 @@
 # Task Progress (`task-progress`)
 
 Interactive UI plugin and MCP toolset (`task_*`) for tracking, visualizing, and
-exporting per-session task dependency graphs (DAGs).
+exporting per-session task dependency graphs.
 
 ## Features
 
@@ -9,14 +9,14 @@ exporting per-session task dependency graphs (DAGs).
   - Tasks and dependencies are persisted per conversation in
     `${PLUGIN_DATA}/sessions/<conversationId>.json` and shared between the MCP
     server and AuxPane UI sidecar.
-- **DAG Dependency & Completion Semantics (`A > B > D` and `A > C`)**:
+- **Dependency & Completion Semantics (`A > B > D` and `A > C`)**:
   - Express subtask dependencies via `depends_on`. If `A` depends on `B` and `C`
     and `B` depends on `D`, then `B`, `C`, and `D` must all be `completed`
     before `A` can be completed.
   - Prevents self-dependencies and cycles with descriptive error messages
     reporting the exact cycle or incomplete subtask path.
 - **Interactive AuxPane UI (`task_ui`)**:
-  - **Graph View (DAG)**: Hierarchical SVG DAG visualization with configurable
+  - **Graph View**: Hierarchical SVG graph visualization with configurable
     hop-radius limiting (`1`, `2`, `3`, `All`) centered on the focused task,
     pan/zoom, and visual distinction between completed and blocking dependency
     edges.

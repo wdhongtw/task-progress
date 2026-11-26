@@ -1,12 +1,12 @@
 ---
 trigger: always_on
-description: Keep the session Task Progress DAG synchronized using task_* MCP tools when planning or executing multi-step tasks.
+description: Keep session Task Progress synchronized using task_* MCP tools when planning or executing multi-step tasks.
 ---
 
-# Session Task Progress DAG Tracking (`task_*`)
+# Session Task Progress Tracking (`task_*`)
 
 When planning or executing multi-step tasks in a conversation, keep the
-session's Task Progress DAG synchronized using the `task_*` MCP tools (and read
+session's task graph synchronized using the `task_*` MCP tools (and read
 the `task-progress` skill for detailed lifecycle and export workflows):
 
 - **Dependency direction (`A > B > D` and `A > C`)**: Parent task `A` lists its

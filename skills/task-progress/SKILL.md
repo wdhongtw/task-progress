@@ -1,8 +1,8 @@
 ---
 name: task-progress
 description: >-
-  Manage, visualize, and export per-session task dependency graphs (DAGs) using
-  the task_* MCP tools and the Task Progress AuxPane UI. Use when tracking
+  Manage, visualize, and export per-session task dependency graphs using the
+  task_* MCP tools and the Task Progress AuxPane UI. Use when tracking
   multi-step plans, expressing subtask dependencies (A > B > D), inspecting
   blocked tasks, or exporting task trees to Markdown nested lists.
 ---
@@ -10,21 +10,22 @@ description: >-
 # Task Progress (`task-progress`)
 
 Use the `task-progress` plugin's MCP tools (`task_*`) and AuxPane UI sidecar to
-model tasks as a Directed Acyclic Graph (DAG), track completion progress, and
-export task trees into Markdown nested lists.
+model task dependencies, track completion progress, and export task trees into
+Markdown nested lists.
 
 ## Dependency Semantics (`A > B > D` and `A > C`)
 
 - If task `A` has subtasks `B` and `C` (`depends_on: ["B", "C"]`) and `B` has
   subtask `D` (`depends_on: ["D"]`), then `B`, `C`, and `D` must all be marked
   `completed` before `A` can be completed.
-- The dependency hierarchy (`A > B > D` and `A > C`) forms a DAG where:
+- The dependency hierarchy (`A > B > D` and `A > C`) forms an acyclic graph
+  where:
   - `outDegree` of `A` = number of direct subtasks `A` depends on (`depends_on`)
   - `inDegree` of `B` = number of parent tasks waiting on `B` (`dependents`)
   - `isBlocked` is automatically `true` when any direct or transitive subtask in
     `depends_on` is not `completed`.
 
-## DAG Modeling Guidelines
+## Task Modeling Guidelines
 
 - **Model deliverables and verification gates**: Represent each concrete
   deliverable, workstream, or verification gate as a task node. When a review or

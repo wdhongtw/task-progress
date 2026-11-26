@@ -2,8 +2,7 @@
  * @fileoverview Stdio MCP Server for `task-progress`.
  *
  * Exposes `task_*` tools so the agent can register, update, complete, delete,
- * focus, list, and export task dependency trees (DAGs) for the active chat
- * session.
+ * focus, list, and export task dependency trees for the active chat session.
  *
  * Session task state is persisted in `${PLUGIN_DATA}/sessions/<conversationId>.json`.
  */
@@ -24,7 +23,7 @@ const TOOLS = [
   {
     name: 'task_register',
     description:
-      'Register a new task (or update an existing task by ID) in the current chat session Task Progress DAG, and focus it by default. If task A has subtask dependencies B and C (`depends_on: ["B", "C"]`), register B and C first (or set `create_missing_dependencies: true`) so A > B and A > C form a valid DAG.',
+      'Register a new task (or update an existing task by ID) in the current chat session Task Progress graph, and focus it by default. If task A has subtask dependencies B and C (`depends_on: ["B", "C"]`), register B and C first (or set `create_missing_dependencies: true`) so A > B and A > C form a valid acyclic dependency graph.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -85,7 +84,7 @@ const TOOLS = [
   {
     name: 'task_update',
     description:
-      'Update an existing task in the current chat session Task Progress DAG (title, description, status, `depends_on` / `add_depends_on` / `remove_depends_on`, metadata, or focus). Rejects cyclic dependencies and rejects setting status to "completed" if any subtask in `depends_on` is incomplete (unless `force: true`).',
+      'Update an existing task in the current chat session Task Progress graph (title, description, status, `depends_on` / `add_depends_on` / `remove_depends_on`, metadata, or focus). Rejects cyclic dependencies and rejects setting status to "completed" if any subtask in `depends_on` is incomplete (unless `force: true`).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -160,7 +159,7 @@ const TOOLS = [
   {
     name: 'task_complete',
     description:
-      'Mark a task as "completed" in the current chat session Task Progress DAG. Validates that all direct and transitive subtask dependencies (`A > B > D`) are already completed; returns an actionable error listing incomplete subtasks unless `force: true` is passed.',
+      'Mark a task as "completed" in the current chat session Task Progress graph. Validates that all direct and transitive subtask dependencies (`A > B > D`) are already completed; returns an actionable error listing incomplete subtasks unless `force: true` is passed.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -199,7 +198,7 @@ const TOOLS = [
   {
     name: 'task_delete',
     description:
-      'Delete a task from the current chat session Task Progress DAG and remove it from any parent tasks `depends_on` lists.',
+      'Delete a task from the current chat session Task Progress graph and remove it from any parent tasks `depends_on` lists.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -235,7 +234,7 @@ const TOOLS = [
   {
     name: 'task_list',
     description:
-      'List all tasks in the current chat session Task Progress DAG with summary counts, in/out degrees, blocked status, and sorting (`created`, `updated`, `in_degree`, `out_degree`, `total_degree`, `status`, `topological`, `title`).',
+      'List all tasks in the current chat session Task Progress graph with summary counts, in/out degrees, blocked status, and sorting (`created`, `updated`, `in_degree`, `out_degree`, `total_degree`, `status`, `topological`, `title`).',
     inputSchema: {
       type: 'object',
       properties: {
