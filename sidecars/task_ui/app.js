@@ -46,7 +46,6 @@
     sortBy: 'created',
     sortOrder: 'asc',
     detailCollapsed: false,
-    uiAssetVersion: '',
     pendingDeepLink: null,
   };
 
@@ -1436,17 +1435,6 @@
         sortBy: state.sortBy,
         order: state.sortOrder,
       });
-
-      if (data.uiAssetVersion) {
-        if (
-          state.uiAssetVersion &&
-          state.uiAssetVersion !== data.uiAssetVersion
-        ) {
-          window.location.reload();
-          return;
-        }
-        state.uiAssetVersion = data.uiAssetVersion;
-      }
 
       state.tasks = Array.isArray(data.tasks) ? data.tasks : [];
       state.edges = Array.isArray(data.edges) ? data.edges : [];

@@ -6,7 +6,7 @@
  * task, and sorting the task list.
  */
 
-import { readFileSync, statSync, watchFile } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { HttpResponse, RawSidecarServer } from '../../lib/sidecar_http.mjs';
@@ -24,33 +24,21 @@ const STATIC_ASSETS = {
   '/app.js': ['app.js', 'application/javascript; charset=utf-8'],
 };
 
-function computeUiAssetVersion() {
-  try {
-    const files = ['index.html', 'styles.css', 'app.js'];
-    return files
-      .map((f) => Math.floor(statSync(join(__dirname, f)).mtimeMs))
-      .join('-');
-  } catch {
-    return '0';
-  }
-}
+const cachedIndexHtml = readFileSync(join(__dirname, 'index.html'), 'utf-8');
+const cachedAssets = new Map(
+  Object.entries(STATIC_ASSETS).map(([route, [file, contentType]]) => [
+    route,
+    { body: readFileSync(join(__dirname, file), 'utf-8'), contentType },
+  ])
+);
 
 const app = new RawSidecarServer();
 
-app.page('/', () => readFileSync(join(__dirname, 'index.html'), 'utf-8'));
-app.page('/fullscreen', () =>
-  readFileSync(join(__dirname, 'index.html'), 'utf-8')
-);
+app.page('/', () => cachedIndexHtml);
+app.page('/fullscreen', () => cachedIndexHtml);
 
-for (const [route, [file, contentType]] of Object.entries(STATIC_ASSETS)) {
-  app.api(
-    route,
-    () =>
-      new HttpResponse(readFileSync(join(__dirname, file), 'utf-8'), {
-        contentType,
-      }),
-    'GET'
-  );
+for (const [route, { body, contentType }] of cachedAssets.entries()) {
+  app.api(route, () => new HttpResponse(body, { contentType }), 'GET');
 }
 
 app.api(
@@ -73,7 +61,6 @@ app.api(
       ...state,
       sortedTasks,
       graphView,
-      uiAssetVersion: computeUiAssetVersion(),
       timestamp: Date.now(),
     };
   },
@@ -97,16 +84,5 @@ app.api(
   },
   'GET'
 );
-
-for (const watched of [
-  join(__dirname, 'main.mjs'),
-  join(__dirname, '../../lib/task_dag.mjs'),
-]) {
-  watchFile(watched, { interval: 2000 }, (curr, prev) => {
-    if (curr.mtimeMs !== prev.mtimeMs) {
-      process.exit(0);
-    }
-  }).unref();
-}
 
 app.run();
